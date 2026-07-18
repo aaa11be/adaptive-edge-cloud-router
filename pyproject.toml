@@ -13,6 +13,9 @@ authors = [{ name = "Project Author" }]
 dependencies = [
   "pydantic>=2.8,<3",
   "psutil>=5.9,<8",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]

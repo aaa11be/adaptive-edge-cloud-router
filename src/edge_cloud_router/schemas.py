@@ -32,6 +32,7 @@ class InferenceResponse(BaseModel):
     quality_score: float = Field(ge=0.0, le=1.0)
     configured_processing_delay_ms: float = Field(ge=0.0)
     configured_rtt_ms: float = Field(ge=0.0)
+    server_processing_ms: float | None = Field(default=None, ge=0.0)
     success: bool = True
     error_type: str | None = None
 
