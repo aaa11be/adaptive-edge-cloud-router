@@ -1,5 +1,3 @@
-"""Deterministic mock backends used to validate the experiment pipeline."""
-
 from __future__ import annotations
 
 import hashlib

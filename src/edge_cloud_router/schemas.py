@@ -1,5 +1,3 @@
-"""Pydantic schemas shared by backends, benchmarks, and future API layers."""
-
 from __future__ import annotations
 
 from datetime import datetime
