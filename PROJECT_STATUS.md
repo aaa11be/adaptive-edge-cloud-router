@@ -1,0 +1,28 @@
+# Project Status
+
+- **Current phase:** Phase 1 — project scaffold and observability
+- **Current branch:** Not initialized in this generated package
+- **Completed:**
+  - Python package scaffold
+  - Pydantic request/response and benchmark schemas
+  - Client process/system metrics collector
+  - Append-only JSONL logger
+  - Deterministic local/cloud mock backends
+  - Paired smoke benchmark
+  - Automated smoke tests
+- **In progress:** User-side environment validation
+- **Blockers:** User hardware and remote-compute details are not recorded yet
+- **Local environment:** CPU-only-compatible default; Python 3.11+
+- **Local backend:** Deterministic mock, default 20 ms delay, quality 0.60
+- **Cloud backend:** Deterministic mock, default 80 ms processing delay plus 40 ms configured RTT, quality 0.90
+- **Current routing policies:** No router yet; paired endpoint profiling only
+- **Current workload:** One configurable smoke-test prompt
+- **Current metrics:** Client process CPU/RSS, system CPU/memory, latency, payload bytes
+- **Latest experiment:** Phase 1 generated-package smoke benchmark
+- **Latest result:** Artifact environment validation passed: 2 tests and 2-record JSONL smoke run; user-machine rerun remains required
+- **Known limitations:**
+  - No real model endpoint
+  - No network transport; RTT is simulated as deterministic delay
+  - Mock quality scores are configured values, not measured task accuracy
+  - No GPU metrics
+- **Next action:** Run tests and the smoke benchmark on the user's machine, then wrap the mock backends with FastAPI

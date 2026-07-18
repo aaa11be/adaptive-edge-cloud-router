@@ -1,0 +1,14 @@
+experiment_id: phase1-smoke
+seed: 42
+local:
+  processing_delay_ms: 20.0
+  configured_rtt_ms: 0.0
+  quality_score: 0.60
+cloud:
+  processing_delay_ms: 80.0
+  configured_rtt_ms: 40.0
+  quality_score: 0.90
+notes: >-
+  This file documents the default deterministic smoke conditions. The Phase 1
+  CLI currently exposes these values as arguments; YAML-driven execution is a
+  later refactor after the pipeline is verified.
