@@ -75,6 +75,29 @@ def run_single_contextual_fixed_request(
         "success": response.success,
     }
 
+def run_contextual_fixed_benchmark(
+    strategy: RoutingStrategy,
+    contexts: list[RoutingContext],
+    warmup_requests: int = 0,
+) -> list[dict[str, Any]]:
+    for request_index in range(1, warmup_requests + 1):
+        run_single_request(
+            strategy,
+            request_index,
+        )
+
+    return [
+        run_single_contextual_fixed_request(
+            strategy,
+            context,
+            request_index,
+        )
+        for request_index, context in enumerate(
+            contexts,
+            start=1,
+        )
+    ]
+
 def run_single_adaptive_request(
     context: RoutingContext,
     request_index: int,

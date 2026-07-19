@@ -409,3 +409,78 @@ def test_run_single_contextual_fixed_request_records_context(
         "minimum_quality_score": 0.8,
         "privacy_required": False,
     }
+
+def test_run_contextual_fixed_benchmark_excludes_warmup(
+    monkeypatch,
+) -> None:
+    contexts = [
+        RoutingContext(
+            estimated_cloud_rtt_ms=150.0,
+            local_load_ratio=0.2,
+            minimum_quality_score=0.5,
+        ),
+        RoutingContext(
+            estimated_cloud_rtt_ms=30.0,
+            local_load_ratio=0.2,
+            minimum_quality_score=0.8,
+        ),
+        RoutingContext(
+            estimated_cloud_rtt_ms=10.0,
+            local_load_ratio=1.0,
+            minimum_quality_score=0.9,
+            privacy_required=True,
+        ),
+    ]
+
+    warmup_indices: list[int] = []
+    measured_contexts: list[RoutingContext] = []
+    measured_indices: list[int] = []
+
+    def fake_run_single_request(
+        strategy: str,
+        request_index: int,
+    ) -> dict:
+        assert strategy == "always_local"
+        warmup_indices.append(request_index)
+
+        return {
+            "request_id": f"warmup-{request_index:03d}",
+        }
+
+    def fake_run_single_contextual_fixed_request(
+        strategy: str,
+        context: RoutingContext,
+        request_index: int,
+    ) -> dict:
+        assert strategy == "always_local"
+        measured_contexts.append(context)
+        measured_indices.append(request_index)
+
+        return {
+            "request_id": f"always_local-{request_index:03d}",
+        }
+
+    monkeypatch.setattr(
+        baseline_benchmark,
+        "run_single_request",
+        fake_run_single_request,
+    )
+    monkeypatch.setattr(
+        baseline_benchmark,
+        "run_single_contextual_fixed_request",
+        fake_run_single_contextual_fixed_request,
+    )
+
+    results = (
+        baseline_benchmark
+        .run_contextual_fixed_benchmark(
+            strategy="always_local",
+            contexts=contexts,
+            warmup_requests=2,
+        )
+    )
+
+    assert warmup_indices == [1, 2]
+    assert measured_contexts == contexts
+    assert measured_indices == [1, 2, 3]
+    assert len(results) == 3
