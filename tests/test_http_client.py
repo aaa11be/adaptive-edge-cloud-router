@@ -1,4 +1,4 @@
-import httpx
+from edge_cloud_router.client import http_client
 from pytest import MonkeyPatch
 
 from edge_cloud_router.client.http_client import (
@@ -31,15 +31,17 @@ def test_send_local_inference_request(monkeypatch: MonkeyPatch) -> None:
         url: str,
         *,
         json: dict[str, object],
-        timeout: float,
     ) -> FakeHttpResponse:
         assert url == LOCAL_INFER_URL
         assert json["request_id"] == "client-test-001"
-        assert timeout == 5.0
 
         return FakeHttpResponse()
 
-    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(
+        http_client.HTTP_CLIENT,
+        "post",
+        fake_post,
+    )
 
     request = InferenceRequest(
         request_id="client-test-001",
