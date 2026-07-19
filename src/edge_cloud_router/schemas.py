@@ -98,3 +98,9 @@ class BenchmarkRecord(BaseModel):
     seed: int
     git_commit: str | None = None
     config_path: str | None = None
+
+class RoutingContext(BaseModel):
+    estimated_cloud_rtt_ms: float = Field(ge=0.0)
+    local_load_ratio: float = Field(ge=0.0, le=1.0)
+    minimum_quality_score: float = Field(ge=0.0, le=1.0)
+    privacy_required: bool = False

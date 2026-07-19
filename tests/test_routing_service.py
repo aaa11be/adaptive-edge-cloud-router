@@ -1,5 +1,9 @@
+from edge_cloud_router.routing import service
+from edge_cloud_router.schemas import (
+    InferenceRequest,
+    RoutingContext,
+)
 from pytest import MonkeyPatch
-
 from edge_cloud_router.client.http_client import (
     CLOUD_INFER_URL,
     LOCAL_INFER_URL,
@@ -83,3 +87,85 @@ def test_route_inference_to_cloud(monkeypatch: MonkeyPatch) -> None:
 
     assert response.endpoint == "cloud"
     assert response.request_id == "routing-service-cloud-001"
+
+def test_route_adaptive_inference_calls_cloud(
+    monkeypatch,
+) -> None:
+    request = InferenceRequest(
+        request_id="adaptive-001",
+        prompt="What is edge AI?",
+        task_type="smoke",
+        metadata={},
+    )
+
+    context = RoutingContext(
+        estimated_cloud_rtt_ms=30.0,
+        local_load_ratio=0.2,
+        minimum_quality_score=0.8,
+        privacy_required=False,
+    )
+
+    expected_response = object()
+
+    def fake_send_inference_request(
+        url: str,
+        sent_request: InferenceRequest,
+    ) -> object:
+        assert url == service.CLOUD_INFER_URL
+        assert sent_request == request
+
+        return expected_response
+
+    monkeypatch.setattr(
+        service,
+        "send_inference_request",
+        fake_send_inference_request,
+    )
+
+    response = service.route_adaptive_inference(
+        context,
+        request,
+    )
+
+    assert response is expected_response
+
+def test_route_adaptive_inference_keeps_private_request_local(
+    monkeypatch,
+) -> None:
+    request = InferenceRequest(
+        request_id="adaptive-private-001",
+        prompt="Private information",
+        task_type="smoke",
+        metadata={},
+    )
+
+    context = RoutingContext(
+        estimated_cloud_rtt_ms=10.0,
+        local_load_ratio=1.0,
+        minimum_quality_score=0.9,
+        privacy_required=True,
+    )
+
+    expected_response = object()
+
+    def fake_send_inference_request(
+        url: str,
+        sent_request: InferenceRequest,
+    ) -> object:
+        assert url == service.LOCAL_INFER_URL
+        assert sent_request == request
+
+        return expected_response
+
+    monkeypatch.setattr(
+        service,
+        "send_inference_request",
+        fake_send_inference_request,
+    )
+
+    response = service.route_adaptive_inference(
+        context,
+        request,
+    )
+
+    assert response is expected_response

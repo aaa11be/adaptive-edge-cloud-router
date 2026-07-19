@@ -1,0 +1,16 @@
+{
+  "mean_latency_ms": 52.4430475,
+  "p50_latency_ms": 52.5277,
+  "p95_latency_ms": 82.7312,
+  "mean_server_processing_ms": 50.34907,
+  "mean_non_inference_overhead_ms": 2.093977499999999,
+  "mean_quality_score": 0.75,
+  "success_rate": 1.0,
+  "local_selection_rate": 0.5,
+  "cloud_selection_rate": 0.5,
+  "quality_satisfied_count": 30,
+  "quality_requirement_satisfaction_rate": 0.75,
+  "privacy_required_count": 10,
+  "privacy_violation_count": 0,
+  "privacy_violation_rate": 0.0
+}

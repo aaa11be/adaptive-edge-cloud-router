@@ -1,0 +1,9 @@
+{
+  "mean_latency_ms": 22.051116666666665,
+  "p50_latency_ms": 22.0131,
+  "p95_latency_ms": 22.4864,
+  "mean_server_processing_ms": 20.35188,
+  "mean_non_inference_overhead_ms": 1.6992366666666665,
+  "mean_quality_score": 0.6,
+  "success_rate": 1.0
+}
