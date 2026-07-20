@@ -119,19 +119,17 @@ def build_routing_context(
     )
 
     cloud_available = True
-    cloud_probe_latency_ms: float | None
+    cloud_probe_latency_ms: float | None = None
 
-    try:
-        cloud_probe_latency_ms = (
-            measure_endpoint_latency_ms(
+    if not privacy_required:
+        try:
+            cloud_probe_latency_ms = measure_endpoint_latency_ms(
                 url=cloud_probe_url,
                 samples=probe_samples,
                 warmup_requests=probe_warmup_requests,
             )
-        )
-    except httpx.HTTPError:
-        cloud_available = False
-        cloud_probe_latency_ms = None
+        except httpx.HTTPError:
+            cloud_available = False
 
     return RoutingContext(
         estimated_local_latency_ms=(

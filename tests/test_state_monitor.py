@@ -170,7 +170,7 @@ def test_build_routing_context_uses_estimates_and_probe(
 
     context = state_monitor.build_routing_context(
         minimum_quality_score=0.8,
-        privacy_required=True,
+        privacy_required=False,
         estimated_local_latency_ms=2500.0,
         estimated_cloud_latency_ms=1100.0,
         cloud_probe_url=(
@@ -195,7 +195,7 @@ def test_build_routing_context_uses_estimates_and_probe(
         "estimated_cloud_latency_ms": 1100.0,
         "local_load_ratio": 0.73,
         "minimum_quality_score": 0.8,
-        "privacy_required": True,
+        "privacy_required": False,
         "cloud_available": True,
         "cloud_probe_latency_ms": 424.5,
     }
@@ -244,3 +244,44 @@ def test_build_routing_context_marks_cloud_unavailable(
         context.estimated_cloud_latency_ms
         == state_monitor.DEFAULT_CLOUD_LATENCY_ESTIMATE_MS
     )
+
+def test_build_routing_context_skips_probe_for_private_request(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_local_load_ratio",
+        lambda sample_interval_s: 0.25,
+    )
+
+    def fail_if_probe_runs(
+        url: str,
+        samples: int,
+        warmup_requests: int,
+    ) -> float:
+        raise AssertionError(
+            "cloud probe must not run for a private request"
+        )
+
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_endpoint_latency_ms",
+        fail_if_probe_runs,
+    )
+
+    context = state_monitor.build_routing_context(
+        minimum_quality_score=0.5,
+        privacy_required=True,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
+        cpu_sample_interval_s=0.1,
+        probe_samples=3,
+        probe_warmup_requests=1,
+    )
+
+    assert context.privacy_required is True
+    assert context.cloud_available is True
+    assert context.cloud_probe_latency_ms is None
+    assert context.local_load_ratio == 0.25
+    assert context.estimated_local_latency_ms == 2500.0
+    assert context.estimated_cloud_latency_ms == 1100.0
