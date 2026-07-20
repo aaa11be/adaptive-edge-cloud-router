@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from edge_cloud_router.monitoring import state_monitor
@@ -38,7 +39,8 @@ def test_measure_local_load_ratio_rejects_non_positive_interval(
             sample_interval_s=0.0,
         )
 
-def test_measure_endpoint_rtt_ms_uses_median(
+
+def test_measure_endpoint_latency_ms_uses_median(
     monkeypatch,
 ) -> None:
     requested_urls: list[str] = []
@@ -77,17 +79,17 @@ def test_measure_endpoint_rtt_ms_uses_median(
         lambda: next(timestamps_ns),
     )
 
-    result = state_monitor.measure_endpoint_rtt_ms(
-        url="http://cloud.example/health",
+    result = state_monitor.measure_endpoint_latency_ms(
+        url="http://cloud.example/remote-health",
         samples=3,
         warmup_requests=1,
     )
 
     assert requested_urls == [
-        "http://cloud.example/health",
-        "http://cloud.example/health",
-        "http://cloud.example/health",
-        "http://cloud.example/health",
+        "http://cloud.example/remote-health",
+        "http://cloud.example/remote-health",
+        "http://cloud.example/remote-health",
+        "http://cloud.example/remote-health",
     ]
     assert result == pytest.approx(20.0)
 
@@ -111,7 +113,7 @@ def test_measure_endpoint_rtt_ms_uses_median(
         ),
     ],
 )
-def test_measure_endpoint_rtt_ms_rejects_invalid_counts(
+def test_measure_endpoint_latency_ms_rejects_invalid_counts(
     samples: int,
     warmup_requests: int,
     expected_message: str,
@@ -120,17 +122,20 @@ def test_measure_endpoint_rtt_ms_rejects_invalid_counts(
         ValueError,
         match=expected_message,
     ):
-        state_monitor.measure_endpoint_rtt_ms(
-            url="http://cloud.example/health",
+        state_monitor.measure_endpoint_latency_ms(
+            url="http://cloud.example/remote-health",
             samples=samples,
             warmup_requests=warmup_requests,
         )
 
-def test_build_routing_context_uses_runtime_measurements(
+
+def test_build_routing_context_uses_estimates_and_probe(
     monkeypatch,
 ) -> None:
     received_cpu_intervals: list[float] = []
-    received_rtt_arguments: list[tuple[str, int, int]] = []
+    received_probe_arguments: list[
+        tuple[str, int, int]
+    ] = []
 
     def fake_measure_local_load_ratio(
         sample_interval_s: float,
@@ -138,19 +143,19 @@ def test_build_routing_context_uses_runtime_measurements(
         received_cpu_intervals.append(sample_interval_s)
         return 0.73
 
-    def fake_measure_endpoint_rtt_ms(
+    def fake_measure_endpoint_latency_ms(
         url: str,
         samples: int,
         warmup_requests: int,
     ) -> float:
-        received_rtt_arguments.append(
+        received_probe_arguments.append(
             (
                 url,
                 samples,
                 warmup_requests,
             )
         )
-        return 24.5
+        return 424.5
 
     monkeypatch.setattr(
         state_monitor,
@@ -159,31 +164,83 @@ def test_build_routing_context_uses_runtime_measurements(
     )
     monkeypatch.setattr(
         state_monitor,
-        "measure_endpoint_rtt_ms",
-        fake_measure_endpoint_rtt_ms,
+        "measure_endpoint_latency_ms",
+        fake_measure_endpoint_latency_ms,
     )
 
     context = state_monitor.build_routing_context(
         minimum_quality_score=0.8,
         privacy_required=True,
-        cloud_health_url="http://cloud.example/health",
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
+        cloud_probe_url=(
+            "http://cloud.example/remote-health"
+        ),
         cpu_sample_interval_s=0.25,
-        rtt_samples=5,
-        rtt_warmup_requests=2,
+        probe_samples=5,
+        probe_warmup_requests=2,
     )
 
     assert received_cpu_intervals == [0.25]
-    assert received_rtt_arguments == [
+    assert received_probe_arguments == [
         (
-            "http://cloud.example/health",
+            "http://cloud.example/remote-health",
             5,
             2,
         )
     ]
 
     assert context.model_dump() == {
-        "estimated_cloud_rtt_ms": 24.5,
+        "estimated_local_latency_ms": 2500.0,
+        "estimated_cloud_latency_ms": 1100.0,
         "local_load_ratio": 0.73,
         "minimum_quality_score": 0.8,
         "privacy_required": True,
+        "cloud_available": True,
+        "cloud_probe_latency_ms": 424.5,
     }
+
+
+def test_build_routing_context_marks_cloud_unavailable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_local_load_ratio",
+        lambda sample_interval_s: 0.2,
+    )
+
+    def fake_failed_probe(
+        url: str,
+        samples: int,
+        warmup_requests: int,
+    ) -> float:
+        request = httpx.Request(
+            "GET",
+            url,
+        )
+        raise httpx.ConnectError(
+            "cloud unavailable",
+            request=request,
+        )
+
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_endpoint_latency_ms",
+        fake_failed_probe,
+    )
+
+    context = state_monitor.build_routing_context(
+        minimum_quality_score=0.5,
+    )
+
+    assert context.cloud_available is False
+    assert context.cloud_probe_latency_ms is None
+    assert (
+        context.estimated_local_latency_ms
+        == state_monitor.DEFAULT_LOCAL_LATENCY_ESTIMATE_MS
+    )
+    assert (
+        context.estimated_cloud_latency_ms
+        == state_monitor.DEFAULT_CLOUD_LATENCY_ESTIMATE_MS
+    )

@@ -188,3 +188,58 @@ def test_cloud_model_backend_rejects_invalid_config(
             temperature=temperature,
             quality_score=quality_score,
         )
+
+def test_cloud_model_backend_probe_calls_remote_model(
+    monkeypatch,
+) -> None:
+    created_clients: list[
+        FakeInferenceClient
+    ] = []
+
+    def fake_client_factory(
+        token: str,
+    ) -> FakeInferenceClient:
+        client = FakeInferenceClient(
+            token=token,
+        )
+        created_clients.append(client)
+        return client
+
+    monkeypatch.setenv(
+        "HF_TOKEN",
+        "test-token",
+    )
+    monkeypatch.setattr(
+        cloud_model_backend,
+        "InferenceClient",
+        fake_client_factory,
+    )
+
+    backend = (
+        cloud_model_backend
+        .CloudModelBackend(
+            model_name="fake-cloud-model",
+        )
+    )
+
+    output_text = backend.probe()
+
+    assert output_text == "cloud answer"
+
+    assert (
+        created_clients[0]
+        .completions
+        .received_arguments
+    ) == [
+        {
+            "model": "fake-cloud-model",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Reply with OK.",
+                },
+            ],
+            "max_tokens": 1,
+            "temperature": 0.0,
+        }
+    ]

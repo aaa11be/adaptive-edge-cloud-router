@@ -62,6 +62,36 @@ class CloudModelBackend:
             token=token,
         )
 
+    def probe(self) -> str:
+        response = (
+            self.client
+            .chat
+            .completions
+            .create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Reply with OK.",
+                    },
+                ],
+                max_tokens=1,
+                temperature=0.0,
+            )
+        )
+
+        output_text = (
+            response
+            .choices[0]
+            .message
+            .content
+        )
+
+        if output_text is None:
+            return ""
+
+        return output_text.strip()
+
     def infer(
         self,
         request: InferenceRequest,

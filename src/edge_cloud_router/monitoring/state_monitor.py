@@ -6,13 +6,25 @@ import psutil
 
 from edge_cloud_router.schemas import RoutingContext
 
+
 DEFAULT_CPU_SAMPLE_INTERVAL_S = 0.1
 
-DEFAULT_RTT_SAMPLES = 3
-DEFAULT_RTT_WARMUP_REQUESTS = 1
-DEFAULT_HTTP_TIMEOUT_S = 2.0
+# Initial end-to-end latency estimates measured from the
+# real-model benchmark. These will later be updated from
+# recent inference observations.
+DEFAULT_LOCAL_LATENCY_ESTIMATE_MS = 3870.0
+DEFAULT_CLOUD_LATENCY_ESTIMATE_MS = 1144.0
 
-DEFAULT_CLOUD_HEALTH_URL = "http://127.0.0.1:8001/health"
+# A cloud probe performs a minimal remote inference request.
+# Keep the count low to avoid unnecessary latency and cost.
+DEFAULT_PROBE_SAMPLES = 1
+DEFAULT_PROBE_WARMUP_REQUESTS = 0
+DEFAULT_HTTP_TIMEOUT_S = 10.0
+
+DEFAULT_CLOUD_PROBE_URL = (
+    "http://127.0.0.1:8001/remote-health"
+)
+
 
 STATE_HTTP_CLIENT = httpx.Client(
     timeout=DEFAULT_HTTP_TIMEOUT_S,
@@ -41,12 +53,14 @@ def measure_local_load_ratio(
     )
 
 
-def measure_endpoint_rtt_ms(
+def measure_endpoint_latency_ms(
     url: str,
-    samples: int = DEFAULT_RTT_SAMPLES,
-    warmup_requests: int = DEFAULT_RTT_WARMUP_REQUESTS,
+    samples: int = DEFAULT_PROBE_SAMPLES,
+    warmup_requests: int = (
+        DEFAULT_PROBE_WARMUP_REQUESTS
+    ),
 ) -> float:
-    """Measure median HTTP round-trip latency to an endpoint."""
+    """Measure median end-to-end latency of an HTTP endpoint."""
 
     if samples <= 0:
         raise ValueError(
@@ -78,30 +92,57 @@ def measure_endpoint_rtt_ms(
 
     return median(measured_latencies_ms)
 
+
 def build_routing_context(
     *,
     minimum_quality_score: float,
     privacy_required: bool = False,
-    cloud_health_url: str = DEFAULT_CLOUD_HEALTH_URL,
-    cpu_sample_interval_s: float = DEFAULT_CPU_SAMPLE_INTERVAL_S,
-    rtt_samples: int = DEFAULT_RTT_SAMPLES,
-    rtt_warmup_requests: int = DEFAULT_RTT_WARMUP_REQUESTS,
+    estimated_local_latency_ms: float = (
+        DEFAULT_LOCAL_LATENCY_ESTIMATE_MS
+    ),
+    estimated_cloud_latency_ms: float = (
+        DEFAULT_CLOUD_LATENCY_ESTIMATE_MS
+    ),
+    cloud_probe_url: str = DEFAULT_CLOUD_PROBE_URL,
+    cpu_sample_interval_s: float = (
+        DEFAULT_CPU_SAMPLE_INTERVAL_S
+    ),
+    probe_samples: int = DEFAULT_PROBE_SAMPLES,
+    probe_warmup_requests: int = (
+        DEFAULT_PROBE_WARMUP_REQUESTS
+    ),
 ) -> RoutingContext:
-    """Build a routing context from live system measurements."""
+    """Build a routing context from estimates and live state."""
 
     local_load_ratio = measure_local_load_ratio(
         sample_interval_s=cpu_sample_interval_s,
     )
 
-    estimated_cloud_rtt_ms = measure_endpoint_rtt_ms(
-        url=cloud_health_url,
-        samples=rtt_samples,
-        warmup_requests=rtt_warmup_requests,
-    )
+    cloud_available = True
+    cloud_probe_latency_ms: float | None
+
+    try:
+        cloud_probe_latency_ms = (
+            measure_endpoint_latency_ms(
+                url=cloud_probe_url,
+                samples=probe_samples,
+                warmup_requests=probe_warmup_requests,
+            )
+        )
+    except httpx.HTTPError:
+        cloud_available = False
+        cloud_probe_latency_ms = None
 
     return RoutingContext(
-        estimated_cloud_rtt_ms=estimated_cloud_rtt_ms,
+        estimated_local_latency_ms=(
+            estimated_local_latency_ms
+        ),
+        estimated_cloud_latency_ms=(
+            estimated_cloud_latency_ms
+        ),
         local_load_ratio=local_load_ratio,
         minimum_quality_score=minimum_quality_score,
         privacy_required=privacy_required,
+        cloud_available=cloud_available,
+        cloud_probe_latency_ms=cloud_probe_latency_ms,
     )

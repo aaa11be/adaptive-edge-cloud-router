@@ -158,10 +158,13 @@ def test_run_single_adaptive_request_records_context(
     monkeypatch,
 ) -> None:
     context = RoutingContext(
-        estimated_cloud_rtt_ms=30.0,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
         local_load_ratio=0.2,
         minimum_quality_score=0.8,
         privacy_required=False,
+        cloud_available=True,
+        cloud_probe_latency_ms=400.0,
     )
 
     def fake_route_adaptive_inference(
@@ -194,10 +197,13 @@ def test_run_single_adaptive_request_records_context(
     assert result["strategy"] == "adaptive"
     assert result["endpoint"] == "cloud"
     assert result["routing_context"] == {
-        "estimated_cloud_rtt_ms": 30.0,
+        "estimated_local_latency_ms": 2500.0,
+        "estimated_cloud_latency_ms": 1100.0,
         "local_load_ratio": 0.2,
         "minimum_quality_score": 0.8,
         "privacy_required": False,
+        "cloud_available": True,
+        "cloud_probe_latency_ms": 400.0,
     }
     assert result["end_to_end_latency_ms"] >= 0.0
 
@@ -206,19 +212,28 @@ def test_run_adaptive_benchmark_uses_each_context(
 ) -> None:
     contexts = [
         RoutingContext(
-            estimated_cloud_rtt_ms=20.0,
+            estimated_local_latency_ms=700.0,
+            estimated_cloud_latency_ms=1400.0,
             local_load_ratio=0.2,
             minimum_quality_score=0.5,
+            cloud_available=True,
+            cloud_probe_latency_ms=500.0,
         ),
         RoutingContext(
-            estimated_cloud_rtt_ms=30.0,
+            estimated_local_latency_ms=2500.0,
+            estimated_cloud_latency_ms=1100.0,
             local_load_ratio=0.9,
             minimum_quality_score=0.5,
+            cloud_available=True,
+            cloud_probe_latency_ms=400.0,
         ),
         RoutingContext(
-            estimated_cloud_rtt_ms=40.0,
+            estimated_local_latency_ms=500.0,
+            estimated_cloud_latency_ms=2000.0,
             local_load_ratio=0.2,
             minimum_quality_score=0.8,
+            cloud_available=True,
+            cloud_probe_latency_ms=450.0,
         ),
     ]
 
@@ -258,15 +273,21 @@ def test_run_adaptive_benchmark_excludes_warmup_contexts(
     monkeypatch,
 ) -> None:
     local_context = RoutingContext(
-        estimated_cloud_rtt_ms=150.0,
+        estimated_local_latency_ms=700.0,
+        estimated_cloud_latency_ms=1400.0,
         local_load_ratio=0.2,
         minimum_quality_score=0.5,
+        cloud_available=True,
+        cloud_probe_latency_ms=500.0,
     )
 
     cloud_context = RoutingContext(
-        estimated_cloud_rtt_ms=30.0,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
         local_load_ratio=0.2,
         minimum_quality_score=0.8,
+        cloud_available=True,
+        cloud_probe_latency_ms=400.0,
     )
 
     measured_contexts = [
@@ -364,10 +385,13 @@ def test_run_single_contextual_fixed_request_records_context(
     monkeypatch,
 ) -> None:
     context = RoutingContext(
-        estimated_cloud_rtt_ms=30.0,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
         local_load_ratio=0.9,
         minimum_quality_score=0.8,
         privacy_required=False,
+        cloud_available=True,
+        cloud_probe_latency_ms=400.0,
     )
 
     def fake_route_inference(
@@ -404,10 +428,13 @@ def test_run_single_contextual_fixed_request_records_context(
     assert result["strategy"] == "always_local"
     assert result["endpoint"] == "local"
     assert result["routing_context"] == {
-        "estimated_cloud_rtt_ms": 30.0,
+        "estimated_local_latency_ms": 2500.0,
+        "estimated_cloud_latency_ms": 1100.0,
         "local_load_ratio": 0.9,
         "minimum_quality_score": 0.8,
         "privacy_required": False,
+        "cloud_available": True,
+        "cloud_probe_latency_ms": 400.0,
     }
 
 def test_run_contextual_fixed_benchmark_excludes_warmup(
@@ -415,20 +442,29 @@ def test_run_contextual_fixed_benchmark_excludes_warmup(
 ) -> None:
     contexts = [
         RoutingContext(
-            estimated_cloud_rtt_ms=150.0,
+            estimated_local_latency_ms=700.0,
+            estimated_cloud_latency_ms=1400.0,
             local_load_ratio=0.2,
             minimum_quality_score=0.5,
+            cloud_available=True,
+            cloud_probe_latency_ms=500.0,
         ),
         RoutingContext(
-            estimated_cloud_rtt_ms=30.0,
+            estimated_local_latency_ms=2500.0,
+            estimated_cloud_latency_ms=1100.0,
             local_load_ratio=0.2,
             minimum_quality_score=0.8,
+            cloud_available=True,
+            cloud_probe_latency_ms=400.0,
         ),
         RoutingContext(
-            estimated_cloud_rtt_ms=10.0,
+            estimated_local_latency_ms=3000.0,
+            estimated_cloud_latency_ms=500.0,
             local_load_ratio=1.0,
             minimum_quality_score=0.9,
             privacy_required=True,
+            cloud_available=True,
+            cloud_probe_latency_ms=200.0,
         ),
     ]
 

@@ -99,10 +99,13 @@ def test_route_adaptive_inference_calls_cloud(
     )
 
     context = RoutingContext(
-        estimated_cloud_rtt_ms=30.0,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
         local_load_ratio=0.2,
         minimum_quality_score=0.8,
         privacy_required=False,
+        cloud_available=True,
+        cloud_probe_latency_ms=400.0,
     )
 
     expected_response = object()
@@ -140,10 +143,13 @@ def test_route_adaptive_inference_keeps_private_request_local(
     )
 
     context = RoutingContext(
-        estimated_cloud_rtt_ms=10.0,
+        estimated_local_latency_ms=3000.0,
+        estimated_cloud_latency_ms=500.0,
         local_load_ratio=1.0,
         minimum_quality_score=0.9,
         privacy_required=True,
+        cloud_available=True,
+        cloud_probe_latency_ms=200.0,
     )
 
     expected_response = object()
