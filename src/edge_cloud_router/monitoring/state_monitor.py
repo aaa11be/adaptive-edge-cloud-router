@@ -4,6 +4,9 @@ from statistics import median
 import httpx
 import psutil
 
+from edge_cloud_router.monitoring.probe_cache import (
+    CloudProbeCache,
+)
 from edge_cloud_router.schemas import RoutingContext
 
 
@@ -111,6 +114,7 @@ def build_routing_context(
     probe_warmup_requests: int = (
         DEFAULT_PROBE_WARMUP_REQUESTS
     ),
+    probe_cache: CloudProbeCache | None = None,
 ) -> RoutingContext:
     """Build a routing context from estimates and live state."""
 
@@ -122,14 +126,54 @@ def build_routing_context(
     cloud_probe_latency_ms: float | None = None
 
     if not privacy_required:
-        try:
-            cloud_probe_latency_ms = measure_endpoint_latency_ms(
-                url=cloud_probe_url,
-                samples=probe_samples,
-                warmup_requests=probe_warmup_requests,
-            )
-        except httpx.HTTPError:
-            cloud_available = False
+        cached_result_used = False
+
+        if probe_cache is not None:
+            current_time_s = time.monotonic()
+
+            if probe_cache.has_fresh_result(
+                current_time_s,
+            ):
+                cloud_available = bool(
+                    probe_cache.available
+                )
+                cloud_probe_latency_ms = (
+                    probe_cache.latency_ms
+                )
+                cached_result_used = True
+
+        if not cached_result_used:
+            try:
+                cloud_probe_latency_ms = (
+                    measure_endpoint_latency_ms(
+                        url=cloud_probe_url,
+                        samples=probe_samples,
+                        warmup_requests=(
+                            probe_warmup_requests
+                        ),
+                    )
+                )
+            except httpx.HTTPError:
+                cloud_available = False
+                cloud_probe_latency_ms = None
+
+            if probe_cache is not None:
+                measured_at_s = time.monotonic()
+
+                if cloud_available:
+                    if cloud_probe_latency_ms is None:
+                        raise RuntimeError(
+                            "successful probe must have latency"
+                        )
+
+                    probe_cache.store_success(
+                        latency_ms=cloud_probe_latency_ms,
+                        measured_at_s=measured_at_s,
+                    )
+                else:
+                    probe_cache.store_failure(
+                        measured_at_s=measured_at_s,
+                    )
 
     return RoutingContext(
         estimated_local_latency_ms=(

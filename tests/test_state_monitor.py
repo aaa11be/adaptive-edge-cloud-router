@@ -2,6 +2,9 @@ import httpx
 import pytest
 
 from edge_cloud_router.monitoring import state_monitor
+from edge_cloud_router.monitoring.probe_cache import (
+    CloudProbeCache,
+)
 
 
 def test_measure_local_load_ratio(
@@ -285,3 +288,99 @@ def test_build_routing_context_skips_probe_for_private_request(
     assert context.local_load_ratio == 0.25
     assert context.estimated_local_latency_ms == 2500.0
     assert context.estimated_cloud_latency_ms == 1100.0
+
+def test_build_routing_context_reuses_fresh_probe_cache(
+    monkeypatch,
+) -> None:
+    cache = CloudProbeCache(
+        ttl_s=10.0,
+    )
+    cache.store_success(
+        latency_ms=321.0,
+        measured_at_s=100.0,
+    )
+
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_local_load_ratio",
+        lambda sample_interval_s: 0.2,
+    )
+    monkeypatch.setattr(
+        state_monitor.time,
+        "monotonic",
+        lambda: 105.0,
+    )
+
+    def fail_if_probe_runs(
+        url: str,
+        samples: int,
+        warmup_requests: int,
+    ) -> float:
+        raise AssertionError(
+            "fresh cache must prevent a cloud probe"
+        )
+
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_endpoint_latency_ms",
+        fail_if_probe_runs,
+    )
+
+    context = state_monitor.build_routing_context(
+        minimum_quality_score=0.5,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
+        probe_cache=cache,
+    )
+
+    assert context.cloud_available is True
+    assert context.cloud_probe_latency_ms == 321.0
+
+
+def test_build_routing_context_refreshes_expired_probe_cache(
+    monkeypatch,
+) -> None:
+    cache = CloudProbeCache(
+        ttl_s=10.0,
+    )
+    cache.store_success(
+        latency_ms=321.0,
+        measured_at_s=100.0,
+    )
+
+    monotonic_values = iter(
+        [
+            110.0,
+            111.0,
+        ]
+    )
+
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_local_load_ratio",
+        lambda sample_interval_s: 0.2,
+    )
+    monkeypatch.setattr(
+        state_monitor.time,
+        "monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr(
+        state_monitor,
+        "measure_endpoint_latency_ms",
+        lambda url, samples, warmup_requests: 500.0,
+    )
+
+    context = state_monitor.build_routing_context(
+        minimum_quality_score=0.5,
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
+        probe_cache=cache,
+    )
+
+    assert context.cloud_available is True
+    assert context.cloud_probe_latency_ms == 500.0
+
+    assert cache.available is True
+    assert cache.latency_ms == 500.0
+    assert cache.measured_at_s == 111.0
