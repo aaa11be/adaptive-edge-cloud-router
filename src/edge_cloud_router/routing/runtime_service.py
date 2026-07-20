@@ -9,11 +9,16 @@ from edge_cloud_router.monitoring.state_monitor import (
     DEFAULT_PROBE_WARMUP_REQUESTS,
     build_routing_context,
 )
+from edge_cloud_router.routing.exploration import (
+    DEFAULT_MINIMUM_OBSERVATIONS,
+    select_exploration_endpoint,
+)
 from edge_cloud_router.routing.latency_estimator import (
     LatencyEstimator,
 )
 from edge_cloud_router.routing.service import (
     route_adaptive_inference,
+    route_inference,
 )
 from edge_cloud_router.schemas import (
     InferenceRequest,
@@ -38,9 +43,11 @@ def route_runtime_adaptive_inference(
     probe_warmup_requests: int = (
         DEFAULT_PROBE_WARMUP_REQUESTS
     ),
+    minimum_observations: int = (
+        DEFAULT_MINIMUM_OBSERVATIONS
+    ),
     latency_estimator: LatencyEstimator | None = None,
 ) -> tuple[RoutingContext, InferenceResponse]:
-    """Measure state, route inference, and update latency estimates."""
 
     estimator = (
         latency_estimator
@@ -63,12 +70,24 @@ def route_runtime_adaptive_inference(
         probe_warmup_requests=probe_warmup_requests,
     )
 
+    exploration_endpoint = select_exploration_endpoint(
+        context=context,
+        estimator=estimator,
+        minimum_observations=minimum_observations,
+    )
+
     request_start_ns = time.perf_counter_ns()
 
-    response = route_adaptive_inference(
-        context,
-        request,
-    )
+    if exploration_endpoint is None:
+        response = route_adaptive_inference(
+            context,
+            request,
+        )
+    else:
+        response = route_inference(
+            f"always_{exploration_endpoint}",
+            request,
+        )
 
     request_end_ns = time.perf_counter_ns()
 

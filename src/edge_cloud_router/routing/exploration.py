@@ -24,10 +24,6 @@ def select_exploration_endpoint(
         DEFAULT_MINIMUM_OBSERVATIONS
     ),
 ) -> EndpointName | None:
-    """Select an eligible endpoint that lacks observations.
-
-    Return None when no exploration is needed.
-    """
 
     if minimum_observations <= 0:
         raise ValueError(
@@ -58,7 +54,6 @@ def select_exploration_endpoint(
 def _get_eligible_endpoints(
     context: RoutingContext,
 ) -> tuple[EndpointName, ...]:
-    """Return endpoints allowed by hard routing constraints."""
 
     if context.privacy_required:
         return ("local",)
@@ -87,7 +82,4 @@ def _get_eligible_endpoints(
     if cloud_meets_quality:
         return ("cloud",)
 
-    # This matches the existing router's fallback:
-    # when neither endpoint satisfies the requested quality,
-    # choose the higher-quality cloud endpoint.
     return ("cloud",)
