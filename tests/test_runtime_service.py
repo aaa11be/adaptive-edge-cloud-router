@@ -10,6 +10,9 @@ from edge_cloud_router.schemas import (
     InferenceRequest,
     RoutingContext,
 )
+from edge_cloud_router.monitoring.probe_cache import (
+    CloudProbeCache,
+)
 
 
 def test_route_runtime_adaptive_inference_uses_estimator_and_updates_it(
@@ -21,6 +24,10 @@ def test_route_runtime_adaptive_inference_uses_estimator_and_updates_it(
         smoothing_factor=0.5,
         local_observation_count=1,
         cloud_observation_count=1,
+    )
+
+    probe_cache = CloudProbeCache(
+        ttl_s=10.0,
     )
 
     measured_context = RoutingContext(
@@ -103,6 +110,7 @@ def test_route_runtime_adaptive_inference_uses_estimator_and_updates_it(
             probe_samples=5,
             probe_warmup_requests=2,
             latency_estimator=estimator,
+            probe_cache=probe_cache,
         )
     )
 
@@ -118,6 +126,7 @@ def test_route_runtime_adaptive_inference_uses_estimator_and_updates_it(
             "cpu_sample_interval_s": 0.25,
             "probe_samples": 5,
             "probe_warmup_requests": 2,
+            "probe_cache": probe_cache,
         }
     ]
 
@@ -403,4 +412,91 @@ def test_route_runtime_uses_adaptive_after_exploration(
             context,
             request,
         )
+    ]
+
+def test_route_runtime_uses_global_probe_cache_by_default(
+    monkeypatch,
+) -> None:
+    estimator = LatencyEstimator(
+        local_latency_ms=2500.0,
+        cloud_latency_ms=1100.0,
+        smoothing_factor=0.5,
+        local_observation_count=1,
+        cloud_observation_count=1,
+    )
+
+    global_cache = CloudProbeCache(
+        ttl_s=15.0,
+    )
+
+    monkeypatch.setattr(
+        runtime_service,
+        "RUNTIME_PROBE_CACHE",
+        global_cache,
+    )
+
+    received_probe_caches: list[CloudProbeCache] = []
+
+    context = RoutingContext(
+        estimated_local_latency_ms=2500.0,
+        estimated_cloud_latency_ms=1100.0,
+        local_load_ratio=0.2,
+        minimum_quality_score=0.5,
+        privacy_required=False,
+        cloud_available=True,
+        cloud_probe_latency_ms=400.0,
+    )
+
+    def fake_build_routing_context(
+        **kwargs,
+    ) -> RoutingContext:
+        received_probe_caches.append(
+            kwargs["probe_cache"]
+        )
+        return context
+
+    monkeypatch.setattr(
+        runtime_service,
+        "build_routing_context",
+        fake_build_routing_context,
+    )
+    monkeypatch.setattr(
+        runtime_service,
+        "route_adaptive_inference",
+        lambda received_context, request: (
+            SimpleNamespace(
+                request_id=request.request_id,
+                endpoint="cloud",
+                success=False,
+            )
+        ),
+    )
+
+    timestamps_ns = iter(
+        [
+            1_000_000_000,
+            1_500_000_000,
+        ]
+    )
+
+    monkeypatch.setattr(
+        runtime_service.time,
+        "perf_counter_ns",
+        lambda: next(timestamps_ns),
+    )
+
+    request = InferenceRequest(
+        request_id="runtime-cache-001",
+        prompt="What is edge AI?",
+        task_type="smoke",
+    )
+
+    runtime_service.route_runtime_adaptive_inference(
+        request=request,
+        minimum_quality_score=0.5,
+        latency_estimator=estimator,
+    )
+
+    assert received_probe_caches == [
+        global_cache,
     ]

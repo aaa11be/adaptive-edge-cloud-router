@@ -25,9 +25,12 @@ from edge_cloud_router.schemas import (
     InferenceResponse,
     RoutingContext,
 )
-
+from edge_cloud_router.monitoring.probe_cache import (
+    CloudProbeCache,
+)
 
 RUNTIME_LATENCY_ESTIMATOR = LatencyEstimator()
+RUNTIME_PROBE_CACHE = CloudProbeCache()
 
 
 def route_runtime_adaptive_inference(
@@ -47,12 +50,19 @@ def route_runtime_adaptive_inference(
         DEFAULT_MINIMUM_OBSERVATIONS
     ),
     latency_estimator: LatencyEstimator | None = None,
+    probe_cache: CloudProbeCache | None = None,
 ) -> tuple[RoutingContext, InferenceResponse]:
 
     estimator = (
         latency_estimator
         if latency_estimator is not None
         else RUNTIME_LATENCY_ESTIMATOR
+    )
+
+    cache = (
+        probe_cache
+        if probe_cache is not None
+        else RUNTIME_PROBE_CACHE
     )
 
     context = build_routing_context(
@@ -68,6 +78,7 @@ def route_runtime_adaptive_inference(
         cpu_sample_interval_s=cpu_sample_interval_s,
         probe_samples=probe_samples,
         probe_warmup_requests=probe_warmup_requests,
+        probe_cache=cache,
     )
 
     exploration_endpoint = select_exploration_endpoint(
