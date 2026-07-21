@@ -12,5 +12,3 @@ results/*.jsonl
 results/*.csv
 results/*.parquet
 !results/.gitkeep
-docs/master_prompt.md
-docs/validation_report.md
